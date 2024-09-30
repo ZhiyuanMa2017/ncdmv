@@ -1,0 +1,43 @@
+name: Go Run
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '00 * * * *'
+jobs:
+  go_run:
+    runs-on: ubuntu-latest
+    services:
+      chrome:
+        image: selenium/standalone-chrome
+        ports:
+          - 4444:4444
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.23.1'
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      - name: Go Install dependencies
+        run: |
+          go mod tidy
+
+      - name: Go Migration
+        run: |
+          go run ./cmd/migrate
+
+      - name: Run
+        run: |
+          go run ./cmd/server -appt_type=driver-license-renewal -database_path=./database/ncdmv.db -locations=cary,clayton,durham-east,durham-south,fuquay-varina,garner,raleigh-east,raleigh-north,raleigh-west,wendell --discord_webhook=https://discord.com/api/webhooks/1289829329596973119/dArKKjlXCzBs0UUrWHN4uUxJkxm4jU0IN7m6rT8d3PJr_HqkLMMll4aoLoWQRQk32Hbf
+          
