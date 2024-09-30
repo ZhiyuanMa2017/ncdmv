@@ -3,9 +3,9 @@ name: Go Run
 on:
   push:
     branches:
-      - main
+      - master
   schedule:
-    - cron: '00 * * * *'
+    - cron: '30 * * * *'
 jobs:
   go_run:
     runs-on: ubuntu-latest
@@ -39,5 +39,4 @@ jobs:
 
       - name: Run
         run: |
-          go run ./cmd/server -appt_type=driver-license-renewal -database_path=./database/ncdmv.db -locations=cary,clayton,durham-east,durham-south,fuquay-varina,garner,raleigh-east,raleigh-north,raleigh-west,wendell --discord_webhook=https://discord.com/api/webhooks/1289829329596973119/dArKKjlXCzBs0UUrWHN4uUxJkxm4jU0IN7m6rT8d3PJr_HqkLMMll4aoLoWQRQk32Hbf
-          
+          go run ./cmd/server -appt_type=driver-license-renewal -database_path=./database/ncdmv.db -locations=cary,clayton,durham-east,durham-south,fuquay-varina,garner,raleigh-east,raleigh-north,raleigh-west,wendell --discord_webhook=${{ secrets.DISCORD_WEBHOOK_URL }}

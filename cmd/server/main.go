@@ -85,7 +85,7 @@ func main() {
 	}
 
 	// Initialize the Chrome context and open a new window.
-	ctx, cancel, err := ncdmv.NewChromeContext(ctx, *headless, disableGpu, *debug)
+	ctx, cancel, err := ncdmv.NewChromeContext(ctx, true, true, *debug)
 	if err != nil {
 		log.Fatalf("Failed to init Chrome context: %s", err)
 	}
@@ -100,7 +100,7 @@ func main() {
 	parsedTimeout := time.Duration(*timeout) * time.Second
 	parsedInterval := time.Duration(*interval) * time.Minute
 
-	if err := client.Start(ctx, parsedApptType, parsedLocations, parsedTimeout, parsedInterval); err != nil {
+	if err := client.Start(ctx, parsedApptType, parsedLocations, parsedTimeout, parsedInterval, *locations); err != nil {
 		log.Fatal(err)
 	}
 }

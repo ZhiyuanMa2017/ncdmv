@@ -429,9 +429,9 @@ func (c Client) RunForLocations(ctx context.Context, apptType AppointmentType, l
 	return appointments, nil
 }
 
-func (c Client) sendNotifications(ctx context.Context, apptType AppointmentType, appointmentsToNotify []models.Appointment, discordWebhook string, interval time.Duration) error {
+func (c Client) sendNotifications(ctx context.Context, apptType AppointmentType, appointmentsToNotify []Appointment, discordWebhook string, interval time.Duration) error {
 	// Sort appointments by time.
-	slices.SortFunc(appointmentsToNotify, func(a, b models.Appointment) int {
+	slices.SortFunc(appointmentsToNotify, func(a, b Appointment) int {
 		if a.Time.Before(b.Time) {
 			return -1
 		} else if a.Time.After(b.Time) {
@@ -441,9 +441,9 @@ func (c Client) sendNotifications(ctx context.Context, apptType AppointmentType,
 	})
 
 	// Group appointments by location.
-	appointmentsByLocation := make(map[string][]models.Appointment)
+	appointmentsByLocation := make(map[string][]Appointment)
 	for _, a := range appointmentsToNotify {
-		appointmentsByLocation[a.Location] = append(appointmentsByLocation[a.Location], a)
+		appointmentsByLocation[a.Location.String()] = append(appointmentsByLocation[a.Location.String()], a)
 	}
 
 	// Sort locations by name.
@@ -452,6 +452,12 @@ func (c Client) sendNotifications(ctx context.Context, apptType AppointmentType,
 		locations = append(locations, location)
 	}
 	slices.Sort(locations)
+
+	if len(locations) == 0 {
+		if err := c.sendDiscordMessage("No availabilities found for the locations\n"); err != nil {
+			log.Printf("Failed to send message to Discord webhook %q: %v", c.discordWebhook, err)
+		}
+	}
 
 	for i, location := range locations {
 		appointments := appointmentsByLocation[location]
@@ -475,11 +481,7 @@ func (c Client) sendNotifications(ctx context.Context, apptType AppointmentType,
 				b.WriteString("  - `(... more appointments available)`\n")
 				break
 			}
-			if appointment.Available {
-				b.WriteString(fmt.Sprintf("  - :white_check_mark: `%s`\n", appointment.Time.String()))
-			} else if c.notifyUnavailable {
-				b.WriteString(fmt.Sprintf("  - :x: `%s`\n", appointment.Time.String()))
-			}
+			b.WriteString(fmt.Sprintf("  - :white_check_mark: `%s`\n", appointment.Time.String()))
 		}
 
 		if i == len(locations)-1 {
@@ -494,16 +496,16 @@ func (c Client) sendNotifications(ctx context.Context, apptType AppointmentType,
 		}
 
 		// Mark all of the appointments in the batch as "notified".
-		for _, appointment := range appointments {
-			if _, err := c.db.CreateNotification(ctx, models.CreateNotificationParams{
-				AppointmentID:  appointment.ID,
-				DiscordWebhook: sql.NullString{String: discordWebhook, Valid: true},
-				Available:      appointment.Available,
-				ApptType:       apptType.String(),
-			}); err != nil {
-				return fmt.Errorf("failed to create notification for appointment %v: %w", appointment, err)
-			}
-		}
+		//for _, appointment := range appointments {
+		//	if _, err := c.db.CreateNotification(ctx, models.CreateNotificationParams{
+		//		AppointmentID:  1,
+		//		DiscordWebhook: sql.NullString{String: discordWebhook, Valid: true},
+		//		Available:      true,
+		//		ApptType:       apptType.String(),
+		//	}); err != nil {
+		//		return fmt.Errorf("failed to create notification for appointment %v: %w", appointment, err)
+		//	}
+		//}
 
 		time.Sleep(interval)
 	}
@@ -588,14 +590,14 @@ func (c Client) listExistingAppointmentsInLocations(ctx context.Context, t time.
 func (c Client) handleTick(ctx context.Context, apptType AppointmentType, locations []Location, timeout time.Duration) error {
 	now := time.Now()
 
-	// Prune all invalid appointments (i.e., those that are in the past) by setting them as unavailable.
-	rows, err := c.db.PruneAppointmentsBeforeDate(ctx, now)
-	if err != nil {
-		return fmt.Errorf("failed to delete appointments before current time (%v): %w", now, err)
-	}
-	if len(rows) > 0 {
-		slog.Info("Pruned invalid appointments", "count", len(rows))
-	}
+	//// Prune all invalid appointments (i.e., those that are in the past) by setting them as unavailable.
+	//rows, err := c.db.PruneAppointmentsBeforeDate(ctx, now)
+	//if err != nil {
+	//	return fmt.Errorf("failed to delete appointments before current time (%v): %w", now, err)
+	//}
+	//if len(rows) > 0 {
+	//	slog.Info("Pruned invalid appointments", "count", len(rows))
+	//}
 
 	existingAppointments, err := c.listExistingAppointmentsInLocations(ctx, now, locations)
 	if err != nil {
@@ -650,9 +652,9 @@ func (c Client) handleTick(ctx context.Context, apptType AppointmentType, locati
 		slog.Info("Updated appointments successfully", "count", len(appointmentsToUpdate))
 	}
 
-	if err := c.sendNotifications(ctx, apptType, appointmentsToNotify, c.discordWebhook, 1*time.Second); err != nil {
-		return fmt.Errorf("failed to send notifications: %w", err)
-	}
+	//if err := c.sendNotifications(ctx, apptType, appointmentsToNotify, c.discordWebhook, 1*time.Second); err != nil {
+	//	return fmt.Errorf("failed to send notifications: %w", err)
+	//}
 	if len(appointmentsToNotify) > 0 {
 		slog.Info("Sent notifications successfully", "count", len(appointmentsToNotify))
 	}
@@ -671,42 +673,43 @@ func (c Client) handleTick(ctx context.Context, apptType AppointmentType, locati
 // Each provided location is processed in a _separate_ Chrome browser tab. This allows for some degree of parallelism
 // as each tab can run independently of the others. The downside is that the list of locations needs to bounded based
 // on the resources available on your machine.
-func (c Client) Start(ctx context.Context, apptType AppointmentType, locations []Location, timeout, interval time.Duration) error {
-	t := time.NewTicker(interval)
-	defer t.Stop()
+func (c Client) Start(ctx context.Context, apptType AppointmentType, locations []Location, timeout, interval time.Duration, locationsString string) error {
 
 	slog.Info("Starting client", "appt_type", apptType, "locations", locations, "timeout", timeout, "interval", interval)
 
 	tick := func() error {
-		defer slog.Info("Sleeping between location checks...", "interval", interval)
-		for {
-			if err := c.handleTick(ctx, apptType, locations, timeout); err != nil {
-				if strings.Contains(err.Error(), temporaryErrString) {
-					slog.Warn("handleTick failed with temporary error; retrying tick...")
-					continue
-				}
-				slog.Error("handleTick failed", "err", err)
-				if c.stopOnFailure {
-					return err
-				}
-			}
-			return nil
-		}
-	}
+		b := strings.Builder{}
+		loc, _ := time.LoadLocation("America/New_York")
+		b.WriteString(fmt.Sprintf("Start searching at %s\n", time.Now().In(loc).Format("2006-01-02 15:04:05")))
+		b.WriteString(fmt.Sprintf("- Appointment type: %s\n", apptType))
+		b.WriteString("- Locations: ")
+		b.WriteString(strings.Join(strings.Split(locationsString, ","), ", "))
+		b.WriteString("\n")
 
-	for {
-		// Trigger a "tick" immediately as the ticker does not do so for us.
-		if err := tick(); err != nil {
-			return err
+		if err := c.sendDiscordMessage(b.String()); err != nil {
+			log.Printf("Failed to send message to Discord webhook %q: %v", c.discordWebhook, err)
 		}
-		// Block until the next tick or the context is cancelled.
-		select {
-		case <-t.C:
-			if err := tick(); err != nil {
-				return err
+
+		var appointments []*Appointment
+		for _, location := range locations {
+			appts, err := c.RunForLocations(ctx, apptType, []Location{location}, timeout)
+			if err != nil {
+				return fmt.Errorf("failed to check locations: %w", err)
 			}
-		case <-ctx.Done():
-			return ctx.Err()
+			appointments = append(appointments, appts...)
 		}
+
+		values := make([]Appointment, len(appointments))
+		for i, appt := range appointments {
+			values[i] = *appt
+		}
+		if err := c.sendNotifications(ctx, apptType, values, c.discordWebhook, 1*time.Second); err != nil {
+			return fmt.Errorf("failed to send notifications: %w", err)
+		}
+		if len(appointments) > 0 {
+			slog.Info("Sent notifications successfully", "count", len(appointments))
+		}
+		return nil
 	}
+	return tick()
 }
