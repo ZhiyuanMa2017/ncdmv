@@ -453,11 +453,11 @@ func (c Client) sendNotifications(ctx context.Context, apptType AppointmentType,
 	}
 	slices.Sort(locations)
 
-	if len(locations) == 0 {
-		if err := c.sendDiscordMessage("No availabilities found for the locations\n"); err != nil {
-			log.Printf("Failed to send message to Discord webhook %q: %v", c.discordWebhook, err)
-		}
-	}
+	//if len(locations) == 0 {
+	//	if err := c.sendDiscordMessage("No availabilities found for the locations\n"); err != nil {
+	//		log.Printf("Failed to send message to Discord webhook %q: %v", c.discordWebhook, err)
+	//	}
+	//}
 
 	for i, location := range locations {
 		appointments := appointmentsByLocation[location]
@@ -678,17 +678,17 @@ func (c Client) Start(ctx context.Context, apptType AppointmentType, locations [
 	slog.Info("Starting client", "appt_type", apptType, "locations", locations, "timeout", timeout, "interval", interval)
 
 	tick := func() error {
-		b := strings.Builder{}
-		loc, _ := time.LoadLocation("America/New_York")
-		b.WriteString(fmt.Sprintf("Start searching at %s\n", time.Now().In(loc).Format("2006-01-02 15:04:05")))
-		b.WriteString(fmt.Sprintf("- Appointment type: %s\n", apptType))
-		b.WriteString("- Locations: ")
-		b.WriteString(strings.Join(strings.Split(locationsString, ","), ", "))
-		b.WriteString("\n")
-
-		if err := c.sendDiscordMessage(b.String()); err != nil {
-			log.Printf("Failed to send message to Discord webhook %q: %v", c.discordWebhook, err)
-		}
+		//b := strings.Builder{}
+		//loc, _ := time.LoadLocation("America/New_York")
+		//b.WriteString(fmt.Sprintf("Start searching at %s\n", time.Now().In(loc).Format("2006-01-02 15:04:05")))
+		//b.WriteString(fmt.Sprintf("- Appointment type: %s\n", apptType))
+		//b.WriteString("- Locations: ")
+		//b.WriteString(strings.Join(strings.Split(locationsString, ","), ", "))
+		//b.WriteString("\n")
+		//
+		//if err := c.sendDiscordMessage(b.String()); err != nil {
+		//	log.Printf("Failed to send message to Discord webhook %q: %v", c.discordWebhook, err)
+		//}
 
 		var appointments []*Appointment
 		for _, location := range locations {
