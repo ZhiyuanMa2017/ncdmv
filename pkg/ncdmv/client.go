@@ -699,15 +699,23 @@ func (c Client) Start(ctx context.Context, apptType AppointmentType, locations [
 			appointments = append(appointments, appts...)
 		}
 
-		values := make([]Appointment, len(appointments))
-		for i, appt := range appointments {
+		twoWeeksLater := time.Now().Add(2 * 7 * 24 * time.Hour)
+		var filteredAppointments []*Appointment
+		for _, appt := range appointments {
+			if appt.Time.Before(twoWeeksLater) {
+				filteredAppointments = append(filteredAppointments, appt)
+			}
+		}
+
+		values := make([]Appointment, len(filteredAppointments))
+		for i, appt := range filteredAppointments {
 			values[i] = *appt
 		}
 		if err := c.sendNotifications(ctx, apptType, values, c.discordWebhook, 1*time.Second); err != nil {
 			return fmt.Errorf("failed to send notifications: %w", err)
 		}
 		if len(appointments) > 0 {
-			slog.Info("Sent notifications successfully", "count", len(appointments))
+			slog.Info("Sent notifications successfully", "count", len(values))
 		}
 		return nil
 	}
