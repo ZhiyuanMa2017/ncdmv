@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/chromedp/cdproto/browser"
+	"github.com/chromedp/cdproto/page"
 	"log"
 	"os"
 	"strings"
@@ -306,7 +308,24 @@ func findAvailableAppointments(ctx context.Context, apptType AppointmentType, lo
 			state = appointmentFlowStateMainPage
 		case appointmentFlowStateMainPage:
 			// Click the "Make Appointment" button once it is visible.
-			if _, err := chromedp.RunResponse(ctx, chromedp.Click(makeApptButtonSelector, chromedp.NodeVisible, chromedp.ByQuery)); err != nil {
+			chromedp.ListenTarget(ctx, func(ev interface{}) {
+				if _, ok := ev.(*page.EventJavascriptDialogOpening); ok {
+					go func() {
+						if err := chromedp.Run(ctx, page.HandleJavaScriptDialog(true)); err != nil {
+							slog.Error("Failed to handle JavaScript dialog", "err", err)
+						}
+					}()
+				}
+			})
+			// Click the "Make Appointment" button once it is visible.
+			if _, err := chromedp.RunResponse(ctx,
+				chromedp.ActionFunc(func(ctx context.Context) error {
+					// Set geolocation permission to "denied"
+					return browser.SetPermission(&browser.PermissionDescriptor{
+						Name: string(browser.PermissionTypeGeolocation),
+					}, browser.PermissionSettingDenied).Do(ctx)
+				}),
+				chromedp.Click(makeApptButtonSelector, chromedp.NodeVisible, chromedp.ByQuery)); err != nil {
 				return nil, err
 			}
 			state = appointmentFlowStateAppointmentType
